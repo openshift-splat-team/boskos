@@ -67,6 +67,10 @@ func CleanAll(opts Options, region string) error {
 
 	opts.Region = regions.Default
 	for _, typ := range GlobalTypeList {
+		if opts.SkipIAMClean && IsIAMType(typ) {
+			logrus.Debugf("Skipping IAM resource type %T", typ)
+			continue
+		}
 		set, err := typ.ListAll(opts)
 		if err != nil {
 			errs = append(errs, errors.Wrapf(err, "Failed to list resources of type %T", typ))

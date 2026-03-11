@@ -27,13 +27,13 @@ RUN go mod download
 COPY . .
 
 ARG DOCKER_TAG
-ENV DOCKER_TAG=${DOCKER_TAG}
-
-# Cache build output too
-RUN make build
-
 ARG cmd
-RUN make "${cmd}"
+
+# Build only the specific command we need
+RUN CGO_ENABLED=0 go build \
+    -o "/go/src/app/_output/bin/${cmd}" \
+    -ldflags "-X 'k8s.io/test-infra/prow/version.Name=${cmd}' -X 'k8s.io/test-infra/prow/version.Version=${DOCKER_TAG}'" \
+    "./cmd/${cmd}"
 
 FROM debian:bookworm-slim
 
