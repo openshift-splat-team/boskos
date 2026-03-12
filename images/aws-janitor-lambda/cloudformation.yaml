@@ -1,0 +1,223 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AWS Janitor Lambda Function with EventBridge Scheduler'
+
+Parameters:
+  ImageUri:
+    Type: String
+    Description: ECR image URI for the Lambda function
+    Default: 123456789012.dkr.ecr.us-east-1.amazonaws.com/aws-janitor-lambda:latest
+
+  StateBucket:
+    Type: String
+    Description: S3 bucket name for storing janitor state
+    Default: my-janitor-state
+
+  StateKey:
+    Type: String
+    Description: S3 key (path) for state file
+    Default: state.json
+
+  TTL:
+    Type: String
+    Description: Time-to-live for resources before deletion
+    Default: 48h
+
+  Region:
+    Type: String
+    Description: AWS region to clean (leave empty for all regions)
+    Default: us-east-1
+
+  DryRun:
+    Type: String
+    Description: Run in dry-run mode (true/false)
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  SkipIAMClean:
+    Type: String
+    Description: Skip IAM resource cleanup (true/false)
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  ScheduleExpression:
+    Type: String
+    Description: EventBridge schedule expression
+    Default: rate(6 hours)
+
+  LambdaTimeout:
+    Type: Number
+    Description: Lambda function timeout in seconds (max 900)
+    Default: 900
+    MinValue: 60
+    MaxValue: 900
+
+  LambdaMemory:
+    Type: Number
+    Description: Lambda function memory in MB
+    Default: 512
+    MinValue: 128
+    MaxValue: 10240
+
+Resources:
+  # IAM Role for Lambda
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-lambda-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3StateAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub 'arn:aws:s3:::${StateBucket}/*'
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !Sub 'arn:aws:s3:::${StateBucket}'
+        - PolicyName: ResourceCleanup
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:Describe*
+                  - ec2:DeleteSnapshot
+                  - ec2:DeleteVolume
+                  - ec2:TerminateInstances
+                  - ec2:DeleteSecurityGroup
+                  - ec2:DeleteSubnet
+                  - ec2:DeleteVpc
+                  - ec2:DeleteInternetGateway
+                  - ec2:DetachInternetGateway
+                  - ec2:DeleteRouteTable
+                  - ec2:DeleteNatGateway
+                  - ec2:DeleteNetworkInterface
+                  - ec2:ReleaseAddress
+                  - ec2:DeleteLaunchTemplate
+                  - ec2:DeleteKeyPair
+                  - ec2:DeleteVpcEndpoints
+                  - elasticloadbalancing:Describe*
+                  - elasticloadbalancing:DeleteLoadBalancer
+                  - elasticloadbalancing:DeleteTargetGroup
+                  - autoscaling:Describe*
+                  - autoscaling:DeleteAutoScalingGroup
+                  - autoscaling:DeleteLaunchConfiguration
+                  - autoscaling:UpdateAutoScalingGroup
+                  - eks:Describe*
+                  - eks:ListClusters
+                  - eks:DeleteCluster
+                  - elasticfilesystem:Describe*
+                  - elasticfilesystem:DeleteFileSystem
+                  - sqs:ListQueues
+                  - sqs:GetQueueAttributes
+                  - sqs:DeleteQueue
+                  - cloudformation:Describe*
+                  - cloudformation:DeleteStack
+                  - s3:ListAllMyBuckets
+                  - s3:ListBucket
+                  - s3:GetBucketTagging
+                  - s3:DeleteBucket
+                  - s3:DeleteObject
+                  - ecr:DescribeRepositories
+                  - ecr:ListImages
+                  - ecr:BatchDeleteImage
+                  - route53:ListHostedZones
+                  - route53:ListResourceRecordSets
+                  - route53:ChangeResourceRecordSets
+                  - route53:DeleteHostedZone
+                  - iam:ListRoles
+                  - iam:ListInstanceProfiles
+                  - iam:ListOpenIDConnectProviders
+                  - iam:GetRole
+                  - iam:ListRolePolicies
+                  - iam:ListAttachedRolePolicies
+                  - iam:DeleteRole
+                  - iam:DeleteRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:DeleteInstanceProfile
+                  - iam:DeleteOpenIDConnectProvider
+                Resource: '*'
+
+  # Lambda Function
+  JanitorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-janitor'
+      PackageType: Image
+      Code:
+        ImageUri: !Ref ImageUri
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: !Ref LambdaTimeout
+      MemorySize: !Ref LambdaMemory
+      Environment:
+        Variables:
+          LOG_LEVEL: info
+
+  # EventBridge Rule
+  ScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${AWS::StackName}-schedule'
+      Description: Triggers AWS Janitor Lambda on a schedule
+      ScheduleExpression: !Ref ScheduleExpression
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt JanitorFunction.Arn
+          Id: JanitorTarget
+          Input: !Sub |
+            {
+              "path": "s3://${StateBucket}/${StateKey}",
+              "ttl": "${TTL}",
+              "region": "${Region}",
+              "dryRun": ${DryRun},
+              "skipIAMClean": ${SkipIAMClean},
+              "includeTags": [],
+              "excludeTags": ["permanent"]
+            }
+
+  # Permission for EventBridge to invoke Lambda
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref JanitorFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ScheduleRule.Arn
+
+Outputs:
+  LambdaFunctionArn:
+    Description: ARN of the Lambda function
+    Value: !GetAtt JanitorFunction.Arn
+
+  LambdaFunctionName:
+    Description: Name of the Lambda function
+    Value: !Ref JanitorFunction
+
+  ScheduleRuleArn:
+    Description: ARN of the EventBridge rule
+    Value: !GetAtt ScheduleRule.Arn
+
+  LambdaRoleArn:
+    Description: ARN of the Lambda execution role
+    Value: !GetAtt LambdaExecutionRole.Arn
+
+  LogGroup:
+    Description: CloudWatch Log Group for Lambda
+    Value: !Sub '/aws/lambda/${JanitorFunction}'

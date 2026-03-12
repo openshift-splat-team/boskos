@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 	"time"
 
 	configv2 "github.com/aws/aws-sdk-go-v2/config"
@@ -55,6 +56,7 @@ var (
 	skipRoute53ManagementCheck = flag.Bool("skip-route53-management-check", false, "If true, skip managed zone check and managed resource name check.")
 	enableDNSZoneClean         = flag.Bool("enable-dns-zone-clean", false, "If true, clean DNS zones.")
 	enableS3BucketsClean       = flag.Bool("enable-s3-buckets-clean", false, "If true, clean S3 buckets.")
+	skipIAMClean               = flag.Bool("skip-iam-clean", false, "If true, skip cleaning IAM resources.")
 
 	excludeTags                common.CommaSeparatedStrings
 	includeTags                common.CommaSeparatedStrings
@@ -133,6 +135,19 @@ func main() {
 	}
 	logrus.Debugf("account: %s", acct)
 
+	// Always exclude resources tagged with "preserve" as a safety mechanism
+	preserveTagFound := false
+	for _, tag := range excludeTags {
+		if tag == "preserve" || strings.HasPrefix(tag, "preserve=") {
+			preserveTagFound = true
+			break
+		}
+	}
+	if !preserveTagFound {
+		excludeTags = append(excludeTags, "preserve")
+		logrus.Info("Automatically excluding resources with 'preserve' tag")
+	}
+
 	excludeTM, err := resources.TagMatcherForTags(excludeTags)
 	if err != nil {
 		logrus.Errorf("Error parsing --exclude-tags: %v", err)
@@ -170,6 +185,7 @@ func main() {
 		SkipRoute53ManagementCheck: *skipRoute53ManagementCheck,
 		EnableDNSZoneClean:         *enableDNSZoneClean,
 		EnableS3BucketsClean:       *enableS3BucketsClean,
+		SkipIAMClean:               *skipIAMClean,
 		CleanEcrRepositories:       cleanEcrRepositories,
 		SkipResourceRecordSetTypes: skipResourceRecordSetTypesSet,
 	}
@@ -225,6 +241,10 @@ func markAndSweep(opts resources.Options, region string) error {
 
 	opts.Region = regions.Default
 	for _, typ := range resources.GlobalTypeList {
+		if opts.SkipIAMClean && resources.IsIAMType(typ) {
+			logrus.Debugf("Skipping IAM resource type %T", typ)
+			continue
+		}
 		if err := typ.MarkAndSweep(opts, res); err != nil {
 			return errors.Wrapf(err, "Error sweeping %T", typ)
 		}

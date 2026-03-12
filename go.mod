@@ -57,6 +57,7 @@ require (
 	github.com/GoogleCloudPlatform/testgrid v0.0.123 // indirect
 	github.com/andygrunwald/go-jira v1.14.0 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
+	github.com/aws/aws-lambda-go v1.53.0 // indirect
 	github.com/aws/aws-sdk-go v1.44.72 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.3 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.11 // indirect

@@ -58,6 +58,9 @@ type Options struct {
 	// If true, clean S3 Buckets.
 	EnableS3BucketsClean bool
 
+	// If true, skip cleaning IAM resources.
+	SkipIAMClean bool
+
 	// List of ECR repositories to clean (only cleans images inside).
 	CleanEcrRepositories []string
 
@@ -116,4 +119,14 @@ var GlobalTypeList = []Type{
 	IAMRoles{},
 	IAMOIDCProviders{},
 	Route53ResourceRecordSets{},
+}
+
+// IsIAMType returns true if the given type is an IAM resource type.
+func IsIAMType(t Type) bool {
+	switch t.(type) {
+	case IAMInstanceProfiles, IAMRoles, IAMOIDCProviders:
+		return true
+	default:
+		return false
+	}
 }
