@@ -11,6 +11,8 @@ AWS Janitor operates in two modes:
 
 ## Installation
 
+### Binary
+
 ```bash
 go build -o aws-janitor ./cmd/aws-janitor
 ```
@@ -18,6 +20,39 @@ go build -o aws-janitor ./cmd/aws-janitor
 Or from the repository root:
 ```bash
 make build
+```
+
+### Container Image
+
+Pre-built multi-architecture container images are available at:
+
+```
+quay.io/ocp-splat/boskos:latest
+quay.io/ocp-splat/boskos:v<YYYYMMDD>-<sha>
+quay.io/ocp-splat/boskos:pr-<number>
+```
+
+Run with Docker or Podman:
+
+```bash
+docker run --rm \
+  -e AWS_ACCESS_KEY_ID=xxx \
+  -e AWS_SECRET_ACCESS_KEY=xxx \
+  quay.io/ocp-splat/boskos:latest \
+  --path s3://my-bucket/janitor-state \
+  --region us-east-1 \
+  --ttl=24h
+```
+
+The container image includes AWS CLI v2 for debugging and runs in dry-run mode by default. Set `ENABLE_DRY_RUN=false` to enable actual deletion:
+
+```bash
+docker run --rm \
+  -e AWS_ACCESS_KEY_ID=xxx \
+  -e AWS_SECRET_ACCESS_KEY=xxx \
+  -e ENABLE_DRY_RUN=false \
+  quay.io/ocp-splat/boskos:latest \
+  --path s3://my-bucket/janitor-state
 ```
 
 ## Usage
@@ -44,6 +79,13 @@ aws-janitor \
   --include-tags=temporary,environment=test \
   --exclude-tags=permanent,environment=production \
   --path=s3://my-bucket/janitor-state.json
+
+# Skip IAM resources in shared accounts
+aws-janitor \
+  --ttl=24h \
+  --skip-iam-clean \
+  --path=s3://my-bucket/janitor-state.json \
+  --region=us-east-1
 ```
 
 ### Tag Filtering
@@ -69,6 +111,20 @@ Resources with **ANY** of these tags will **NOT** be managed:
 ```
 
 **Note**: Exclude tags take precedence over include tags.
+
+#### Automatic Preserve Tag
+
+For safety, resources tagged with `preserve` (or `preserve=<any-value>`) are **automatically excluded** from cleanup, even if not specified in `--exclude-tags`. This provides a safety mechanism to protect critical resources.
+
+```bash
+# Tag a resource to preserve it
+aws ec2 create-tags \
+  --resources i-1234567890abcdef0 \
+  --tags Key=preserve,Value=important
+
+# The resource will be excluded even without --exclude-tags=preserve
+aws-janitor --all --ttl=0s --path=s3://state/janitor.json
+```
 
 #### Example: Cleanup Test Resources Only
 
@@ -132,6 +188,7 @@ Then tag resources with `janitor-ttl=48h` to give them a 48-hour TTL instead of 
 | `--enable-vpc-endpoints-clean` | `false` | Enable cleaning of VPC endpoints |
 | `--enable-dns-zone-clean` | `false` | Enable deletion of Route53 hosted zones |
 | `--enable-s3-buckets-clean` | `false` | Enable cleaning of S3 buckets |
+| `--skip-iam-clean` | `false` | Skip cleaning IAM resources (roles, instance profiles, OIDC providers) |
 | `--skip-route53-management-check` | `false` | Skip built-in Route53 zone/record filtering |
 | `--skip-resource-record-set-types` | `SOA,NS` | Route53 record types to never delete |
 | `--clean-ecr-repositories` | (none) | Comma-separated list of ECR repos to clean images from |
@@ -177,10 +234,12 @@ Then tag resources with `janitor-ttl=48h` to give them a 48-hour TTL instead of 
 
 ### Global Resources (non-regional)
 
-- **IAM Instance Profiles**
-- **IAM Roles**
-- **IAM OIDC Providers**
+- **IAM Instance Profiles** (skipped with `--skip-iam-clean`)
+- **IAM Roles** (skipped with `--skip-iam-clean`)
+- **IAM OIDC Providers** (skipped with `--skip-iam-clean`)
 - **Route53 Resource Record Sets** (with strict built-in filtering)
+
+**Note**: IAM resources are cleaned by default. Use `--skip-iam-clean` to preserve all IAM resources, which is recommended when running janitor in shared AWS accounts or when IAM resources are managed externally.
 
 ## Route53 Special Handling
 
@@ -195,6 +254,59 @@ Route53 has built-in safety checks that cannot be disabled without `--skip-route
    - `kops-controller.internal.e2e-*`
 
 To manage other zones/records, use `--skip-route53-management-check` (not recommended for production).
+
+## Container Image
+
+The aws-janitor container image includes:
+- AWS Janitor binary
+- AWS CLI v2 (for debugging)
+- Minimal Debian base image
+
+### Container-Specific Behavior
+
+The container entrypoint **automatically enables `--dry-run` by default** for safety. To actually delete resources, you must set `ENABLE_DRY_RUN=false`:
+
+```bash
+# Safe: dry-run mode (default)
+docker run --rm quay.io/ocp-splat/boskos:latest --path s3://bucket/state
+
+# Dangerous: will actually delete resources
+docker run --rm -e ENABLE_DRY_RUN=false quay.io/ocp-splat/boskos:latest --path s3://bucket/state
+```
+
+If you explicitly pass `--dry-run` in the arguments, the environment variable is ignored.
+
+### Container Usage Examples
+
+**Basic run with AWS credentials:**
+```bash
+docker run --rm \
+  -e AWS_ACCESS_KEY_ID=your-key \
+  -e AWS_SECRET_ACCESS_KEY=your-secret \
+  quay.io/ocp-splat/boskos:latest \
+  --path s3://my-bucket/state.json \
+  --region us-east-1 \
+  --ttl=24h \
+  --skip-iam-clean
+```
+
+**Using AWS profile from host:**
+```bash
+docker run --rm \
+  -v ~/.aws:/root/.aws:ro \
+  quay.io/ocp-splat/boskos:latest \
+  --path s3://my-bucket/state.json
+```
+
+**Debugging with AWS CLI:**
+```bash
+docker run --rm \
+  -e AWS_ACCESS_KEY_ID=your-key \
+  -e AWS_SECRET_ACCESS_KEY=your-secret \
+  --entrypoint /bin/bash \
+  quay.io/ocp-splat/boskos:latest \
+  -c "aws sts get-caller-identity && /bin/aws-janitor --help"
+```
 
 ## AWS Credentials
 
@@ -220,6 +332,19 @@ aws-janitor --all --ttl=0s --dry-run --log-level=debug
 ```
 
 Review the logs to ensure only intended resources will be deleted.
+
+**Note**: When using the container image, dry-run is enabled by default unless you explicitly set `ENABLE_DRY_RUN=false`.
+
+### Shared AWS Accounts
+
+When running in shared AWS accounts, consider using `--skip-iam-clean` to prevent accidental deletion of IAM roles and policies that might be managed by other teams or infrastructure-as-code tools:
+
+```bash
+aws-janitor \
+  --skip-iam-clean \
+  --include-tags=team=myteam \
+  --path s3://state/janitor.json
+```
 
 ### State Bucket Protection
 
@@ -387,6 +512,60 @@ aws-janitor \
   --include-tags=team=ci \
   --region=us-east-1 \
   --path=s3://global-janitor-state/ci-us-east-1.json
+```
+
+### Example 4: Kubernetes CronJob
+
+```yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: aws-janitor
+  namespace: janitor
+spec:
+  schedule: "0 */6 * * *"  # Every 6 hours
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: aws-janitor
+          restartPolicy: OnFailure
+          containers:
+          - name: aws-janitor
+            image: quay.io/ocp-splat/boskos:latest
+            args:
+            - --path=s3://my-janitor-state/state.json
+            - --region=us-east-1
+            - --ttl=48h
+            - --skip-iam-clean
+            - --include-tags=temporary=true
+            - --exclude-tags=permanent,environment=production
+            - --enable-s3-buckets-clean
+            - --log-level=info
+            env:
+            - name: ENABLE_DRY_RUN
+              value: "false"
+            # Use IRSA (IAM Roles for Service Accounts) for AWS credentials
+            # Or use a secret for static credentials:
+            # - name: AWS_ACCESS_KEY_ID
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: aws-credentials
+            #       key: access-key-id
+            # - name: AWS_SECRET_ACCESS_KEY
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: aws-credentials
+            #       key: secret-access-key
+            resources:
+              requests:
+                memory: "256Mi"
+                cpu: "100m"
+              limits:
+                memory: "512Mi"
+                cpu: "500m"
 ```
 
 ## Contributing
