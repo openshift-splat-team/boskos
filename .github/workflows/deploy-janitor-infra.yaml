@@ -5,9 +5,6 @@ on:
     workflows: ["Build and Push AWS Janitor Image"]
     types:
       - completed
-    branches:
-      - master
-      - main
   workflow_dispatch:
     inputs:
       image_tag:
@@ -84,13 +81,19 @@ jobs:
           go test -v ./...
           echo "Done"
 
+      - name: Build complete summary
+        run: |
+          echo "### ✅ Build Complete" >> $GITHUB_STEP_SUMMARY
+
       - name: Configure AWS credentials
+        if: (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'master') || github.event_name == 'workflow_dispatch'
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Diff
+        if: (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'master') || github.event_name == 'workflow_dispatch'
         working-directory: infra
         run: |
           echo "🔍 Showing infrastructure changes..."
@@ -98,13 +101,16 @@ jobs:
           echo "Done"
 
       - name: Deploy
+        if: (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'master') || github.event_name == 'workflow_dispatch'
         working-directory: infra
         run: |
           echo "🚀 Deploying infrastructure changes..."
           cdk deploy --all --require-approval never
           echo "Done"
 
+
       - name: Summary
+        if: (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'master') || github.event_name == 'workflow_dispatch'
         run: |
           echo "### ✅ Deployment Complete" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
