@@ -90,7 +90,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Diff
         if: (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'master') || github.event_name == 'workflow_dispatch'
