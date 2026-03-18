@@ -4,26 +4,18 @@ AWS CDK (Go) infrastructure for deploying the aws-janitor as a scheduled Fargate
 
 ## What It Does
 
-Deploys infrastructure to AWS that runs `aws-janitor` every 6 hours to clean up orphaned resources in **us-east-2**.
+Deploys infrastructure to AWS that runs `aws-janitor` every 6 hours to clean up AWS resources.
 
 **Features:**
 - Serverless execution on AWS Fargate
 - Stores state in S3 to track resource age
 - Uses specific git SHA-tagged images (`sha-abc1234`)
-- **Dry-run enabled by default** (safe!)
+- **Dry-run enabled by default** 
 - All infrastructure tagged with `preserve` to prevent self-deletion
 
-## Architecture
-
-- **VPC**: Minimal 2-AZ public subnets (no NAT gateways)
-- **Security Group**: Blocks all inbound, allows outbound
-- **ECS Fargate**: Runs janitor container
-- **EventBridge**: Triggers every 6 hours
-- **S3**: Versioned state storage
-- **CloudWatch**: 7-day log retention
-- **IAM**: Comprehensive cleanup permissions
-
 ## Quick Start
+
+**Important Note:** these instructions are to run the CDK locally. This is not needed normally as the infrastructure is deployed automatically via GitHub Actions.
 
 Install AWS CDK and Golang. Then:
 
@@ -39,14 +31,12 @@ cdk diff
 # To Preview the cloudformation template (will be stored in infra/cdk.out)
 cdk synth
 
-# To Deploy janitor stack
+# To Deploy janitor stack (do not do it unless you know what you are doing! GitHub actions take care of the deployment automatically so there should be no need of executing this manually)
 cdk deploy
 
-# To Destroy janitor stack
+# To Destroy janitor stack (careful, this tears down the infrastructure, do not do it unless you know what you are doing!)
 cdk destroy
 ```
-
-Note: these are executed automatically when merging changes into master.
 
 ## Configuration
 
@@ -60,7 +50,7 @@ All settings via environment variables set at CDK build time (see [infra.go](./i
 | `JANITOR_TTL` | `24h` | Resource age before deletion |
 | `JANITOR_DRY_RUN` | `true` | Dry-run mode |
 | `JANITOR_EXCLUDE_TAGS` | `preserve` | Tags to exclude |
-| `JANITOR_STATE_BUCKET_NAME` | `splat-team-janitor-state-bucket` | S3 bucket |
+| `JANITOR_STATE_BUCKET_NAME` | `splat-team-janitor-state` | S3 bucket |
 
 **Feature flags:**
 - `JANITOR_ENABLE_S3_CLEAN` - Enable S3 cleanup (default: false)
@@ -69,13 +59,6 @@ All settings via environment variables set at CDK build time (see [infra.go](./i
 - `JANITOR_ENABLE_VPC_ENDPOINTS_CLEAN` - Enable VPC endpoints (default: false)
 - `JANITOR_ENABLE_KEY_PAIRS_CLEAN` - Enable key pairs (default: false)
 - `JANITOR_ENABLE_TARGET_GROUP_CLEAN` - Enable target groups (default: false)
-
-**Example:**
-```bash
-export JANITOR_DRY_RUN=false
-export JANITOR_ENABLE_S3_CLEAN=true
-cdk deploy
-```
 
 ## CI/CD
 
@@ -97,22 +80,15 @@ Automatically deploys via GitHub Actions when container image builds.
 
 ### Dry-Run by Default
 
-- Identifies and logs resources
-- No actual deletions
-- View CloudWatch logs to see what would be deleted
+Identifies and logs resources but no actual deletions
 
-**To enable deletion:**
-```bash
-export JANITOR_DRY_RUN=false
-cdk deploy
-```
+**To enable deletion:** Set the `JANITOR_DRY_RUN` env variable to `false` before running `cdk deploy` inside the `deploy-janitor-infra.yaml` GitHub workflow.
 
 ## Monitoring
 
-**View logs:**
-```bash
-aws logs tail /aws/ecs/aws-janitor --follow
-```
+## Monitoring
+
+Check the Janitor execution logs in Cloudwatch.
 
 **Check schedule:**
 ```bash
@@ -123,9 +99,9 @@ aws events describe-rule --name AwsJanitorStack-JanitorScheduleRule*
 
 ### Bootstrap Required
 
-First-time setup per account/region:
+First-time setup per account/region, to setup CDK resources:
 ```bash
-cdk bootstrap aws://ACCOUNT-ID/us-east-1
+cdk bootstrap aws://ACCOUNT-ID/REGION-NAME
 ```
 
 ### Image Not Found
@@ -134,14 +110,6 @@ Ensure build workflow completed:
 ```bash
 docker pull quay.io/ocp-splat/boskos:sha-abc1234
 ```
-
-## Cost
-
-~$1-2/month:
-- Fargate: ~$0.50/month (4 runs/day × 5min)
-- S3: <$0.01/month
-- Logs: <$0.50/month
-- NAT: $0 (using public subnets)
 
 ## Resources Cleaned
 

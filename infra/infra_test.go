@@ -372,8 +372,8 @@ func TestAwsJanitorStack(t *testing.T) {
 		if DefaultSkipIAMClean != "true" {
 			t.Errorf("Expected DefaultSkipIAMClean to be true, got %s", DefaultSkipIAMClean)
 		}
-		if DefaultStateBucket != "splat-team-janitor-state-bucket" {
-			t.Errorf("Expected DefaultStateBucket to be splat-team-janitor-state-bucket, got %s", DefaultStateBucket)
+		if DefaultStateBucket != "splat-team-janitor-state" {
+			t.Errorf("Expected DefaultStateBucket to be splat-team-janitor-state, got %s", DefaultStateBucket)
 		}
 	})
 }

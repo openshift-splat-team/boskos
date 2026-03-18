@@ -64,7 +64,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Install AWS CDK
-        run: npm install -g aws-cdk@latest
+        run: npm install -g aws-cdk@2.242.0
 
       - name: Build
         working-directory: infra

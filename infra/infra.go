@@ -21,15 +21,15 @@ const (
 	DefaultSchedule                = "rate(6 hours)"                   // Run the janitor every 6 hours
 	DefaultTTL                     = "24h"                             // Wait 24 hours before deleting resources
 	DefaultCleanRegion             = "us-east-2"
-	DefaultExcludeTags             = "preserve"                        // Exclude resources with the "preserve" tag
-	DefaultDryRun                  = "true"                            // By default run in dry-run mode
-	DefaultStateBucket             = "splat-team-janitor-state-bucket" // Name of the S3 bucket storing the Janitor state
-	DefaultSkipIAMClean            = "true"                            // Skip IAM roles cleanup by default
-	DefaultEnableS3Clean           = "false"                           // Disable S3 cleanup by default
-	DefaultEnableDNSClean          = "false"                           // Disable DNS Cleanup by default
-	DefaultEnableVPCEndpointsClean = "false"                           // Disable VPC Endpoints cleanup by default
-	DefaultEnableKeyPairsClean     = "false"                           // Disable KeyParis cleanup by default
-	DefaultEnableTargetGroupClean  = "false"                           // Disable Target Groups cleanup by default
+	DefaultExcludeTags             = "preserve"                 // Exclude resources with the "preserve" tag
+	DefaultDryRun                  = "true"                     // By default run in dry-run mode
+	DefaultStateBucket             = "splat-team-janitor-state" // Name of the S3 bucket storing the Janitor state
+	DefaultSkipIAMClean            = "true"                     // Skip IAM roles cleanup by default
+	DefaultEnableS3Clean           = "false"                    // Disable S3 cleanup by default
+	DefaultEnableDNSClean          = "false"                    // Disable DNS Cleanup by default
+	DefaultEnableVPCEndpointsClean = "false"                    // Disable VPC Endpoints cleanup by default
+	DefaultEnableKeyPairsClean     = "false"                    // Disable KeyParis cleanup by default
+	DefaultEnableTargetGroupClean  = "false"                    // Disable Target Groups cleanup by default
 )
 
 type AwsJanitorStackProps struct {
@@ -133,53 +133,63 @@ func NewAwsJanitorStack(scope constructs.Construct, id string, props *AwsJanitor
 			jsii.String("ec2:DisassociateAddress"),
 			jsii.String("ec2:ReleaseAddress"),
 			jsii.String("ec2:TerminateInstances"),
+
 			// ELB permissions
 			jsii.String("elasticloadbalancing:Describe*"),
 			jsii.String("elasticloadbalancing:DeleteLoadBalancer"),
 			jsii.String("elasticloadbalancing:DeleteTargetGroup"),
+
 			// Auto Scaling permissions
 			jsii.String("autoscaling:Describe*"),
 			jsii.String("autoscaling:DeleteAutoScalingGroup"),
 			jsii.String("autoscaling:DeleteLaunchConfiguration"),
 			jsii.String("autoscaling:UpdateAutoScalingGroup"),
-			// IAM permissions
+
+			// IAM permissions (read-only until the janitor is tested)
 			jsii.String("iam:List*"),
 			jsii.String("iam:Get*"),
-			jsii.String("iam:DeleteRole"),
-			jsii.String("iam:DeleteRolePolicy"),
-			jsii.String("iam:DeleteUser"),
-			jsii.String("iam:DeleteUserPolicy"),
-			jsii.String("iam:DeleteInstanceProfile"),
-			jsii.String("iam:RemoveRoleFromInstanceProfile"),
-			jsii.String("iam:DetachRolePolicy"),
-			jsii.String("iam:DetachUserPolicy"),
-			// Route53 permissions
+			// jsii.String("iam:DeleteRole"),
+			// jsii.String("iam:DeleteRolePolicy"),
+			// jsii.String("iam:DeleteUser"),
+			// jsii.String("iam:DeleteUserPolicy"),
+			// jsii.String("iam:DeleteInstanceProfile"),
+			// jsii.String("iam:RemoveRoleFromInstanceProfile"),
+			// jsii.String("iam:DetachRolePolicy"),
+			// jsii.String("iam:DetachUserPolicy"),
+
+			// Route53 permissions (read-only until the janitor is tested)
 			jsii.String("route53:List*"),
 			jsii.String("route53:Get*"),
-			jsii.String("route53:DeleteHostedZone"),
-			jsii.String("route53:ChangeResourceRecordSets"),
-			// S3 permissions
+			// jsii.String("route53:DeleteHostedZone"),
+			// jsii.String("route53:ChangeResourceRecordSets"),
+
+			// S3 permissions (read-only until the janitor is tested)
 			jsii.String("s3:List*"),
 			jsii.String("s3:Get*"),
-			jsii.String("s3:DeleteBucket"),
-			jsii.String("s3:DeleteObject*"),
+			// jsii.String("s3:DeleteBucket"),
+			// jsii.String("s3:DeleteObject*"),
+
 			// ECR permissions
 			jsii.String("ecr:Describe*"),
 			jsii.String("ecr:List*"),
 			jsii.String("ecr:BatchDeleteImage"),
+
 			// CloudFormation permissions
 			jsii.String("cloudformation:DescribeStacks"),
 			jsii.String("cloudformation:ListStacks"),
 			jsii.String("cloudformation:DeleteStack"),
+
 			// EKS permissions
 			jsii.String("eks:DescribeCluster"),
 			jsii.String("eks:ListClusters"),
 			jsii.String("eks:DeleteCluster"),
+
 			// EFS permissions
 			jsii.String("elasticfilesystem:DescribeFileSystems"),
 			jsii.String("elasticfilesystem:DescribeMountTargets"),
 			jsii.String("elasticfilesystem:DeleteFileSystem"),
 			jsii.String("elasticfilesystem:DeleteMountTarget"),
+
 			// SQS permissions
 			jsii.String("sqs:ListQueues"),
 			jsii.String("sqs:GetQueueAttributes"),
@@ -299,7 +309,7 @@ func main() {
 		StackProps: awscdk.StackProps{
 			Env: &awscdk.Environment{},
 			Tags: &map[string]*string{
-				"preserve": jsii.String(""),
+				"preserve": jsii.String("janitor"),
 			},
 			Description: jsii.String("AWS Janitor infrastructure for automated resource cleanup"),
 		},
