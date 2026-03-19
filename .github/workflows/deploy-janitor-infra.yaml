@@ -1,0 +1,119 @@
+name: Deploy AWS Janitor Infrastructure
+
+on:
+  workflow_run:
+    workflows: ["Build and Push AWS Janitor Image"]
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to deploy (default: git SHA)'
+        required: false
+        type: string
+
+env:
+  GO_VERSION: "1.26.1"
+  NODE_VERSION: "24"
+  AWS_REGION: "us-east-1" # Region where to deploy the janitor infrastructure in
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+
+    permissions:
+      id-token: write
+      contents: read
+
+    # Set janitor config here to customize it's execution parameters
+    env:
+      JANITOR_CLEAN_REGION: "us-east-2" # set to 'all' to cleanup all regions or specify a region to cleanup only that region
+      JANITOR_DRY_RUN: "true" # set to false to enable cleanup. Only do that after having tested the tool in dry run mode!
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set image tag
+        run: |
+          echo "Computing image tag..."
+          # Use SHA from workflow_run or current commit. 
+          # This is used to inject the specific Quay.io image tag to deploy in Fargate.
+          SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+          TAG="sha-${SHA:0:7}"
+
+          # Allow manual override
+          if [ -n "${{ inputs.image_tag }}" ]; then
+            TAG="${{ inputs.image_tag }}"
+          fi
+
+          echo "JANITOR_IMAGE_URI=quay.io/ocp-splat/boskos:${TAG}" >> $GITHUB_ENV
+          echo "📦 Using image: quay.io/ocp-splat/boskos:${TAG}"
+          echo "Done"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: infra/go.sum
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install AWS CDK
+        run: npm install -g aws-cdk@2.242.0
+
+      - name: Build
+        working-directory: infra
+        run: |
+          echo "🔨 Building CDK application to verify it compiles..."
+          go mod download
+          go build -v .
+          echo "Done"
+
+      - name: Test
+        working-directory: infra
+        run: |
+          echo "🧪 Running unit tests..."
+          go test -v ./...
+          echo "Done"
+
+      - name: Build complete summary
+        run: |
+          echo "### ✅ Build Complete" >> $GITHUB_STEP_SUMMARY
+
+      - name: Configure AWS credentials
+        if: (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'master') || github.event_name == 'workflow_dispatch'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Diff
+        if: (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'master') || github.event_name == 'workflow_dispatch'
+        working-directory: infra
+        run: |
+          echo "🔍 Showing infrastructure changes..."
+          cdk diff --all || true
+          echo "Done"
+
+      - name: Deploy
+        if: (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'master') || github.event_name == 'workflow_dispatch'
+        working-directory: infra
+        run: |
+          echo "🚀 Deploying infrastructure changes..."
+          cdk deploy --all --require-approval never
+          echo "Done"
+
+
+      - name: Summary
+        if: (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'master') || github.event_name == 'workflow_dispatch'
+        run: |
+          echo "### ✅ Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image**: \`$JANITOR_IMAGE_URI\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deployed to**: ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Dry-run**: ${{ env.JANITOR_DRY_RUN }}" >> $GITHUB_STEP_SUMMARY
