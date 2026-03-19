@@ -12,7 +12,7 @@ on:
       - 'infra/**'
       - 'go.mod'
       - 'go.sum'
-      - '.github/workflows/build-aws-janitor.yaml'
+      - '.github/workflows/**'
   pull_request:
     paths:
       - 'cmd/aws-janitor/**'
@@ -21,7 +21,7 @@ on:
       - 'infra/**'
       - 'go.mod'
       - 'go.sum'
-      - '.github/workflows/build-aws-janitor.yaml'
+      - '.github/workflows/**'
   workflow_dispatch:
 
 env:
