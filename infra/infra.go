@@ -242,9 +242,6 @@ func NewAwsJanitorStack(scope constructs.Construct, id string, props *AwsJanitor
 	if config.EnableTargetGroupClean {
 		command = append(command, jsii.String("--enable-target-group-clean"))
 	}
-	if config.DryRun {
-		command = append(command, jsii.String("--dry-run"))
-	}
 
 	// Fargate Task Definition
 	taskDefinition := awsecs.NewFargateTaskDefinition(stack, jsii.String("JanitorTaskDef"), &awsecs.FargateTaskDefinitionProps{
@@ -254,9 +251,18 @@ func NewAwsJanitorStack(scope constructs.Construct, id string, props *AwsJanitor
 		TaskRole:       taskRole,
 	})
 
+	// Set ENABLE_DRY_RUN environment variable for entrypoint.sh
+	envVars := &map[string]*string{}
+	if config.DryRun {
+		(*envVars)["ENABLE_DRY_RUN"] = jsii.String("true")
+	} else {
+		(*envVars)["ENABLE_DRY_RUN"] = jsii.String("false")
+	}
+
 	taskDefinition.AddContainer(jsii.String("janitor"), &awsecs.ContainerDefinitionOptions{
-		Image:   awsecs.ContainerImage_FromRegistry(jsii.String(config.ImageUri), nil),
-		Command: &command,
+		Image:       awsecs.ContainerImage_FromRegistry(jsii.String(config.ImageUri), nil),
+		Command:     &command,
+		Environment: envVars,
 		Logging: awsecs.LogDriver_AwsLogs(&awsecs.AwsLogDriverProps{
 			StreamPrefix: jsii.String("janitor"),
 			LogGroup:     logGroup,
