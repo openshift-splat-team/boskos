@@ -237,14 +237,19 @@ func TestAwsJanitorStack(t *testing.T) {
 						"--enable-vpc-endpoints-clean",
 						"--enable-key-pairs-clean",
 						"--enable-target-group-clean",
-						"--dry-run",
 					}),
+					"Environment": []interface{}{
+						map[string]interface{}{
+							"Name":  "ENABLE_DRY_RUN",
+							"Value": "true",
+						},
+					},
 				},
 			},
 		})
 	})
 
-	t.Run("dry-run flag is optional in command", func(t *testing.T) {
+	t.Run("dry-run controlled via environment variable", func(t *testing.T) {
 		app := awscdk.NewApp(nil)
 
 		config := &JanitorConfig{
@@ -268,7 +273,8 @@ func TestAwsJanitorStack(t *testing.T) {
 
 		template := assertions.Template_FromStack(stack, nil)
 
-		// Command should contain required flags but NOT --dry-run
+		// Command should contain required flags
+		// ENABLE_DRY_RUN environment variable should be set to "false"
 		template.HasResourceProperties(jsii.String("AWS::ECS::TaskDefinition"), map[string]interface{}{
 			"ContainerDefinitions": []interface{}{
 				map[string]interface{}{
@@ -279,6 +285,12 @@ func TestAwsJanitorStack(t *testing.T) {
 						"--log-level",
 						"--region",
 					}),
+					"Environment": []interface{}{
+						map[string]interface{}{
+							"Name":  "ENABLE_DRY_RUN",
+							"Value": "false",
+						},
+					},
 				},
 			},
 		})
@@ -317,8 +329,13 @@ func TestAwsJanitorStack(t *testing.T) {
 						"--ttl",
 						"--exclude-tags",
 						"--log-level",
-						"--dry-run",
 					}),
+					"Environment": []interface{}{
+						map[string]interface{}{
+							"Name":  "ENABLE_DRY_RUN",
+							"Value": "true",
+						},
+					},
 				},
 			},
 		})
