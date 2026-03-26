@@ -29,7 +29,7 @@ jobs:
     # Set janitor config here to customize it's execution parameters
     env:
       JANITOR_CLEAN_REGION: "us-west-2" # set to 'all' to cleanup all regions or specify a region to cleanup only that region
-      JANITOR_DRY_RUN: "true"
+      JANITOR_DRY_RUN: "false"
 
     steps:
       - name: Checkout code
