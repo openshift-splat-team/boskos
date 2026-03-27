@@ -44,7 +44,7 @@ func (Instances) MarkAndSweep(opts Options, set *Set) error {
 		Filters: []ec2types.Filter{
 			{
 				Name:   aws2.String("instance-state-name"),
-				Values: []string{"running", "pending"},
+				Values: []string{"running", "pending", "stopped"},
 			},
 		},
 	}
