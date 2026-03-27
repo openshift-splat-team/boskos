@@ -133,6 +133,11 @@ func NewAwsJanitorStack(scope constructs.Construct, id string, props *AwsJanitor
 			jsii.String("ec2:DisassociateAddress"),
 			jsii.String("ec2:ReleaseAddress"),
 			jsii.String("ec2:TerminateInstances"),
+			jsii.String("ec2:RevokeSecurityGroupIngress"),
+			jsii.String("ec2:RevokeSecurityGroupEgress"),
+			jsii.String("ec2:DetachInternetGateway"),
+			jsii.String("ec2:AssociateDhcpOptions"),
+			jsii.String("ec2:DisassociateRouteTable"),
 
 			// ELB permissions
 			jsii.String("elasticloadbalancing:Describe*"),
