@@ -31,7 +31,13 @@ import (
 // CleanAll cleans all of the resources for all of the regions visible to
 // the provided AWS config.
 func CleanAll(opts Options, region string) error {
-	regionList, err := regions.ParseRegion(opts.Config, region)
+	return CleanAllWithExclusions(opts, region, nil)
+}
+
+// CleanAllWithExclusions cleans all of the resources for all of the regions visible to
+// the provided AWS config, excluding specified regions.
+func CleanAllWithExclusions(opts Options, region string, excludeRegions []string) error {
+	regionList, err := regions.ParseRegionWithExclusions(opts.Config, region, excludeRegions)
 	if err != nil {
 		return err
 	}

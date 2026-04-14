@@ -21,6 +21,7 @@ const (
 	DefaultSchedule                = "rate(6 hours)"                   // Run the janitor every 6 hours
 	DefaultTTL                     = "24h"                             // Wait 24 hours before deleting resources
 	DefaultCleanRegion             = "us-east-2"
+	DefaultExcludeRegions          = ""                         // Comma-separated list of regions to exclude from cleanup
 	DefaultExcludeTags             = "preserve"                 // Exclude resources with the "preserve" tag
 	DefaultDryRun                  = "true"                     // By default run in dry-run mode
 	DefaultStateBucket             = "splat-team-janitor-state" // Name of the S3 bucket storing the Janitor state
@@ -42,6 +43,7 @@ type JanitorConfig struct {
 	Schedule                string
 	TTL                     string
 	CleanRegion             string
+	ExcludeRegions          string
 	EnableS3Clean           bool
 	EnableDNSZoneClean      bool
 	SkipIAMClean            bool
@@ -229,6 +231,11 @@ func NewAwsJanitorStack(scope constructs.Construct, id string, props *AwsJanitor
 		command = append(command, jsii.String("--region"), jsii.String(config.CleanRegion))
 	}
 
+	// Add --exclude-regions if specified
+	if config.ExcludeRegions != "" {
+		command = append(command, jsii.String("--exclude-regions"), jsii.String(config.ExcludeRegions))
+	}
+
 	if config.EnableS3Clean {
 		command = append(command, jsii.String("--enable-s3-buckets-clean"))
 	}
@@ -305,6 +312,7 @@ func main() {
 		Schedule:                getEnv("JANITOR_SCHEDULE", DefaultSchedule),
 		TTL:                     getEnv("JANITOR_TTL", DefaultTTL),
 		CleanRegion:             getEnv("JANITOR_CLEAN_REGION", DefaultCleanRegion),
+		ExcludeRegions:          getEnv("JANITOR_EXCLUDE_REGIONS", DefaultExcludeRegions),
 		EnableS3Clean:           getEnv("JANITOR_ENABLE_S3_CLEAN", DefaultEnableS3Clean) == "true",
 		EnableDNSZoneClean:      getEnv("JANITOR_ENABLE_DNS_ZONE_CLEAN", DefaultEnableDNSClean) == "true",
 		SkipIAMClean:            getEnv("JANITOR_SKIP_IAM_CLEAN", DefaultSkipIAMClean) == "true",
