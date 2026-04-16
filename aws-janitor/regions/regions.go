@@ -55,6 +55,12 @@ func GetAll(cfg *aws2.Config) ([]string, error) {
 
 // ParseRegion checks whether the provided region is valid. If an empty region is provided, returns all valid regions.
 func ParseRegion(cfg *aws2.Config, region string) ([]string, error) {
+	return ParseRegionWithExclusions(cfg, region, nil)
+}
+
+// ParseRegionWithExclusions checks whether the provided region is valid. If an empty region is provided, returns all valid regions.
+// excludeRegions is a list of regions to exclude when cleaning all regions (only applies when region is empty).
+func ParseRegionWithExclusions(cfg *aws2.Config, region string, excludeRegions []string) ([]string, error) {
 	all, err := GetAll(cfg)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed retrieving list of regions")
@@ -62,6 +68,10 @@ func ParseRegion(cfg *aws2.Config, region string) ([]string, error) {
 	allRegions := sets.NewString(all...)
 
 	if region == "" {
+		// Filter out excluded regions
+		for _, exclude := range excludeRegions {
+			allRegions.Delete(exclude)
+		}
 		// return a sorted list
 		return allRegions.List(), nil
 	}

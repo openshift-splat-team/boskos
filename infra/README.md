@@ -46,6 +46,7 @@ All settings via environment variables set at CDK build time (see [infra.go](./i
 |----------|---------|-------------|
 | `JANITOR_IMAGE_URI` | `quay.io/ocp-splat/boskos:latest` | Container image. Note that github actions override this to use the specific built tag for better deployment stability. |
 | `JANITOR_CLEAN_REGION` | `us-east-2` | Region to clean (use `all` to clean all regions) |
+| `JANITOR_EXCLUDE_REGIONS` | _(empty)_ | Comma-separated list of regions to exclude when cleaning all regions (e.g., `me-south-1,ap-east-1`) |
 | `JANITOR_SCHEDULE` | `rate(6 hours)` | How often to run |
 | `JANITOR_TTL` | `24h` | Resource age before deletion |
 | `JANITOR_DRY_RUN` | `true` | Dry-run mode |

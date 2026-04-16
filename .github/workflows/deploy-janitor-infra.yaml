@@ -29,6 +29,7 @@ jobs:
     # Set janitor config here to customize it's execution parameters
     env:
       JANITOR_CLEAN_REGION: "all" # set to 'all' to cleanup all regions or specify a region to cleanup only that region
+      JANITOR_EXCLUDE_REGIONS: "me-south-1" # excluded because this region is currently disrupted and network calls to the region time out
       JANITOR_DRY_RUN: "false"
       JANITOR_ENABLE_VPC_ENDPOINTS_CLEAN: "true"
       JANITOR_ENABLE_TARGET_GROUP_CLEAN: "true"

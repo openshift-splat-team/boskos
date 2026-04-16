@@ -339,6 +339,44 @@ func TestAwsJanitorStack(t *testing.T) {
 				},
 			},
 		})
+
+		t.Run("exclude-regions flag is added when specified", func(t *testing.T) {
+			app := awscdk.NewApp(nil)
+
+			config := &JanitorConfig{
+				ImageUri:        DefaultImageUri,
+				Schedule:        DefaultSchedule,
+				TTL:             DefaultTTL,
+				CleanRegion:     "all",
+				ExcludeRegions:  "me-south-1,ap-east-1",
+				ExcludeTags:     DefaultExcludeTags,
+				DryRun:          true,
+				StateBucketName: DefaultStateBucket,
+			}
+
+			stack := NewAwsJanitorStack(app, "TestStack", &AwsJanitorStackProps{
+				StackProps: awscdk.StackProps{
+					Env: &awscdk.Environment{
+						Region: jsii.String("us-east-1"),
+					},
+				},
+				Config: config,
+			})
+
+			template := assertions.Template_FromStack(stack, nil)
+
+			// Command should contain --exclude-regions flag
+			template.HasResourceProperties(jsii.String("AWS::ECS::TaskDefinition"), map[string]interface{}{
+				"ContainerDefinitions": []interface{}{
+					map[string]interface{}{
+						"Command": assertions.Match_ArrayWith(&[]interface{}{
+							"--exclude-regions",
+							"me-south-1,ap-east-1",
+						}),
+					},
+				},
+			})
+		})
 	})
 
 	t.Run("creates correct number of resources", func(t *testing.T) {

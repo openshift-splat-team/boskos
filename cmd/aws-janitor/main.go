@@ -62,6 +62,7 @@ var (
 	includeTags                common.CommaSeparatedStrings
 	skipResourceRecordSetTypes common.CommaSeparatedStrings
 	cleanEcrRepositories       common.CommaSeparatedStrings
+	excludeRegions             common.CommaSeparatedStrings
 
 	sweepCount int
 
@@ -84,6 +85,7 @@ func init() {
 		"Resources must include all of these tags in order to be managed by the janitor. Given as a comma-separated list of tags in key[=value] format; excluding the value will match any tag with that key. Keys can be repeated.")
 	flag.Var(&skipResourceRecordSetTypes, "skip-resource-record-set-types", "A list of resource record types which should not be deleted, splitted using comma.")
 	flag.Var(&cleanEcrRepositories, "clean-ecr-repositories", "Comma-separated list of ECR repositories for which to clean images.")
+	flag.Var(&excludeRegions, "exclude-regions", "Comma-separated list of AWS regions to exclude from cleaning (only applies when cleaning all regions).")
 }
 
 func main() {
@@ -191,11 +193,11 @@ func main() {
 	}
 
 	if *cleanAll {
-		if err := resources.CleanAll(opts, *region); err != nil {
+		if err := resources.CleanAllWithExclusions(opts, *region, excludeRegions); err != nil {
 			logrus.Errorf("Error cleaning all resources: %v", err)
 			runtime.Goexit()
 		}
-	} else if err := markAndSweep(opts, *region); err != nil {
+	} else if err := markAndSweep(opts, *region, excludeRegions); err != nil {
 		logrus.Errorf("Error marking and sweeping resources: %v", err)
 		runtime.Goexit()
 	}
@@ -203,7 +205,7 @@ func main() {
 	exitCode = 0
 }
 
-func markAndSweep(opts resources.Options, region string) error {
+func markAndSweep(opts resources.Options, region string, excludeRegions []string) error {
 	s3p, err := s3path.GetPath(opts.Config, *path)
 	if err != nil {
 		return errors.Wrapf(err, "-path %q isn't a valid S3 path", *path)
@@ -219,7 +221,7 @@ func markAndSweep(opts resources.Options, region string) error {
 			return fmt.Errorf("state bucket %s, must be tagged with exclude-tags", s3p.Bucket)
 		}
 	}
-	regionList, err := regions.ParseRegion(opts.Config, region)
+	regionList, err := regions.ParseRegionWithExclusions(opts.Config, region, excludeRegions)
 	if err != nil {
 		return err
 	}
